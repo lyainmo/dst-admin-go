@@ -2,28 +2,34 @@ FROM arm64v8/ubuntu:22.04
 
 ENV DEBIAN_FRONTEND=noninteractive LANG=C.UTF-8 TZ=Asia/Shanghai
 
-# 仅启用 i386，多架构源显式配置，并限制 i386 仅用 main/updates/security
+# 启用 i386/amd64 架构，并为它们配置 archive 源
 RUN set -eux; \
     dpkg --add-architecture i386; \
-    # 显式为 i386 写 sources，限制到 main，避免 universe/restricted 导致 404
-    printf '%s\n' \
-      "deb [arch=i386] http://ports.ubuntu.com/ubuntu-ports jammy main" \
-      "deb [arch=i386] http://ports.ubuntu.com/ubuntu-ports jammy-updates main" \
-      "deb [arch=i386] http://ports.ubuntu.com/ubuntu-ports jammy-security main" \
-      > /etc/apt/sources.list.d/i386.list; \
-    apt-get update || apt-get update; \
+    dpkg --add-architecture amd64; \
+    # arm64 主架构源（ports）
+    sed -i 's|http://ports.ubuntu.com/ubuntu-ports|http://ports.ubuntu.com/ubuntu-ports|g' /etc/apt/sources.list; \
+    # i386/amd64 架构源（archive，可换成国内镜像）
+    tee /etc/apt/sources.list.d/multiarch.list <<'EOF'
+deb [arch=i386] http://archive.ubuntu.com/ubuntu jammy main restricted universe multiverse
+deb [arch=i386] http://archive.ubuntu.com/ubuntu jammy-updates main restricted universe multiverse
+deb [arch=i386] http://archive.ubuntu.com/ubuntu jammy-security main restricted universe multiverse
+deb [arch=amd64] http://archive.ubuntu.com/ubuntu jammy main restricted universe multiverse
+deb [arch=amd64] http://archive.ubuntu.com/ubuntu jammy-updates main restricted universe multiverse
+deb [arch=amd64] http://archive.ubuntu.com/ubuntu jammy-security main restricted universe multiverse
+EOF
+    apt-get update; \
     apt-get install -y --no-install-recommends \
       ca-certificates curl wget xz-utils unzip procps screen gnupg \
-      # i386 最小运行库
+      # SteamCMD 需要的 i386 库
       libc6:i386 libstdc++6:i386 libgcc-s1:i386 libcurl4:i386 zlib1g:i386 \
-      # 可选：这两个是 multilib 包，不会拉 i386 仓库索引
       lib32gcc-s1 lib32stdc++6 \
+      # DST 专服需要的 amd64 库
+      libc6:amd64 libstdc++6:amd64 libgcc-s1:amd64 libcurl4:amd64 zlib1g:amd64 \
     ; \
     update-ca-certificates; \
     rm -rf /var/lib/apt/lists/*
 
-
-# 安装预编译 box86/box64（用于在 ARM64 上运行 x86/x86_64 可执行文件）
+# 安装预编译 box86/box64
 RUN set -eux; \
     echo "deb [arch=arm64] https://ryanfortner.github.io/box64-debs/ubuntu jammy main" > /etc/apt/sources.list.d/box64.list; \
     echo "deb [arch=arm64] https://ryanfortner.github.io/box86-debs/ubuntu jammy main" > /etc/apt/sources.list.d/box86.list; \
@@ -32,12 +38,12 @@ RUN set -eux; \
     apt-get update && apt-get install -y --no-install-recommends box64 box86 && \
     rm -rf /var/lib/apt/lists/*
 
-# 安装 SteamCMD（直接官方包，避免 apt 源问题）
+# 安装 SteamCMD（官方包）
 WORKDIR /steamcmd
 RUN curl -fsSL https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz -o steamcmd_linux.tar.gz && \
     tar -xzf steamcmd_linux.tar.gz && rm steamcmd_linux.tar.gz
 
-# 仅复制运行所需文件（CI 会确保这些路径存在）
+# 复制运行所需文件
 WORKDIR /app
 COPY dist /app/dist
 COPY dst-admin-go /app/dst-admin-go
@@ -53,3 +59,4 @@ COPY dst_config /app/dst_config
 EXPOSE 8082/tcp 10888/udp 10998/udp 10999/udp
 
 ENTRYPOINT ["/app/docker-entrypoint.sh"]
+
