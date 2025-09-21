@@ -2,14 +2,26 @@ FROM arm64v8/ubuntu:22.04
 
 ENV DEBIAN_FRONTEND=noninteractive LANG=C.UTF-8 TZ=Asia/Shanghai
 
-# 仅启用 i386，安装基础与 32 位运行库（避免拉 amd64 索引导致 404）
-RUN dpkg --add-architecture i386 && \
-    apt-get update && apt-get install -y --no-install-recommends \
+# 仅启用 i386，多架构源显式配置，并限制 i386 仅用 main/updates/security
+RUN set -eux; \
+    dpkg --add-architecture i386; \
+    # 显式为 i386 写 sources，限制到 main，避免 universe/restricted 导致 404
+    printf '%s\n' \
+      "deb [arch=i386] http://ports.ubuntu.com/ubuntu-ports jammy main" \
+      "deb [arch=i386] http://ports.ubuntu.com/ubuntu-ports jammy-updates main" \
+      "deb [arch=i386] http://ports.ubuntu.com/ubuntu-ports jammy-security main" \
+      > /etc/apt/sources.list.d/i386.list; \
+    apt-get update || apt-get update; \
+    apt-get install -y --no-install-recommends \
       ca-certificates curl wget xz-utils unzip procps screen gnupg \
-      # 32 位运行库（对齐你参考脚本）
-      lib32gcc-s1 lib32stdc++6 libcurl4-gnutls-dev:i386 \
-      libc6:i386 libstdc++6:i386 libgcc-s1:i386 libcurl4:i386 zlib1g:i386 && \
-    update-ca-certificates && rm -rf /var/lib/apt/lists/*
+      # i386 最小运行库
+      libc6:i386 libstdc++6:i386 libgcc-s1:i386 libcurl4:i386 zlib1g:i386 \
+      # 可选：这两个是 multilib 包，不会拉 i386 仓库索引
+      lib32gcc-s1 lib32stdc++6 \
+    ; \
+    update-ca-certificates; \
+    rm -rf /var/lib/apt/lists/*
+
 
 # 安装预编译 box86/box64（用于在 ARM64 上运行 x86/x86_64 可执行文件）
 RUN set -eux; \
