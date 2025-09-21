@@ -14,13 +14,7 @@ jobs:
   build:
     runs-on: ubuntu-22.04
 
-    steps:
-      - uses: actions/checkout@v4
-      - name: 选择最快的 APT 镜像
-        uses: vegardit/fast-apt-mirror.sh@v1
-        with:
-          country: CN
-          
+    steps:      
       - name: Checkout (full history)
         uses: actions/checkout@v4
         with:
