@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: '1.5.1'
+        description: 'tag'
         required: true
 
 env:
