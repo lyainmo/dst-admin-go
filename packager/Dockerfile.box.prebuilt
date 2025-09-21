@@ -1,0 +1,39 @@
+FROM arm64v8/ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive LANG=C.UTF-8 TZ=Asia/Shanghai
+
+# Enable multi-arch and install base + i386/amd64 runtime libs for steamcmd/DST server
+RUN dpkg --add-architecture i386 && dpkg --add-architecture amd64 && \
+    apt-get update && apt-get install -y --no-install-recommends \
+      ca-certificates curl wget xz-utils unzip procps screen gnupg \
+      libc6:i386 libstdc++6:i386 libgcc-s1:i386 libcurl4:i386 zlib1g:i386 \
+      libc6:amd64 libstdc++6:amd64 libgcc-s1:amd64 libcurl4:amd64 zlib1g:amd64 && \
+    update-ca-certificates && rm -rf /var/lib/apt/lists/*
+
+# Prebuilt box86/box64
+RUN set -eux; \
+    echo "deb [arch=arm64] https://ryanfortner.github.io/box64-debs/ubuntu jammy main" > /etc/apt/sources.list.d/box64.list; \
+    echo "deb [arch=arm64] https://ryanfortner.github.io/box86-debs/ubuntu jammy main" > /etc/apt/sources.list.d/box86.list; \
+    curl -fsSL https://ryanfortner.github.io/box64-debs/REPO.KEY > /etc/apt/trusted.gpg.d/box64.gpg; \
+    curl -fsSL https://ryanfortner.github.io/box86-debs/REPO.KEY > /etc/apt/trusted.gpg.d/box86.gpg; \
+    apt-get update && apt-get install -y --no-install-recommends box64 box86 && \
+    rm -rf /var/lib/apt/lists/*
+
+# SteamCMD (i386)
+WORKDIR /steamcmd
+RUN curl -fsSL https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz -o steamcmd_linux.tar.gz && \
+    tar -xzf steamcmd_linux.tar.gz && rm steamcmd_linux.tar.gz
+
+# App runtime (only runtime-needed files copied by CI)
+WORKDIR /app
+COPY dist /app/dist
+COPY dst-admin-go /app/dst-admin-go
+COPY docker-entrypoint.sh /app/docker-entrypoint.sh
+RUN chmod +x /app/dst-admin-go /app/docker-entrypoint.sh
+COPY static /app/static
+COPY config.yml /app/config.yml
+COPY docker_dst_config /app/docker_dst_config
+COPY dst_config /app/dst_config
+
+EXPOSE 8082/tcp 10888/udp 10998/udp 10999/udp
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
