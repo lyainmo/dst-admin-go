@@ -16,7 +16,7 @@ deb [arch=i386] http://archive.ubuntu.com/ubuntu jammy-security main restricted 
 deb [arch=amd64] http://archive.ubuntu.com/ubuntu jammy main restricted universe multiverse
 deb [arch=amd64] http://archive.ubuntu.com/ubuntu jammy-updates main restricted universe multiverse
 deb [arch=amd64] http://archive.ubuntu.com/ubuntu jammy-security main restricted universe multiverse
-EOF\
+EOF \
     && apt-get update \
     && apt-get install -y --no-install-recommends \
          ca-certificates curl wget xz-utils unzip procps screen gnupg \
