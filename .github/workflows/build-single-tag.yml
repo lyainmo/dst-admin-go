@@ -1,0 +1,243 @@
+name: build-single-tag-arm64
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: '1.5.1'
+        required: true
+
+env:
+  IMAGE: docker.io/starlain/dst-admin-go-arm64
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout (full history)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Switch to tag
+        run: |
+          set -euo pipefail
+          TAG="${{ inputs.tag }}"
+          git checkout -f "tags/${TAG}"
+
+      - name: Prepare clean build context
+        id: prep
+        run: |
+          set -euo pipefail
+          TAG="${{ inputs.tag }}"
+          CTX="/tmp/buildctx"
+          REL="/tmp/release"
+          mkdir -p "${CTX}" "${REL}"
+          echo "CTX=${CTX}" >> $GITHUB_OUTPUT
+          echo "REL=${REL}" >> $GITHUB_OUTPUT
+
+      - name: Download and extract release assets (non-arch files)
+        run: |
+          set -euo pipefail
+          TAG="${{ inputs.tag }}"
+          REL="${{ steps.prep.outputs.REL }}"
+          URL="https://github.com/carrot-hu23/dst-admin-go/releases/download/${TAG}/dst-admin-go.${TAG}.tar.gz"
+
+          echo "Downloading: ${URL}"
+          curl -fL --retry 5 --retry-delay 3 -o /tmp/release.tgz "${URL}"
+          tar -xzf /tmp/release.tgz -C "${REL}"
+
+          ROOT="${REL}"
+          SUBDIRS=$(find "${REL}" -mindepth 1 -maxdepth 1 -type d | wc -l)
+          if [ "${SUBDIRS}" -eq 1 ]; then
+            CANDIDATE=$(find "${REL}" -mindepth 1 -maxdepth 1 -type d)
+            if [ -d "${CANDIDATE}/dist" ] || [ -d "${CANDIDATE}/static" ] || [ -f "${CANDIDATE}/config.yml" ]; then
+              ROOT="${CANDIDATE}"
+            fi
+          fi
+          echo "Release root: ${ROOT}"
+
+          rm -rf dist static config.yml docker_dst_config dst_config || true
+          [ -d "${ROOT}/dist" ] && rsync -a "${ROOT}/dist/" ./dist/ || true
+          [ -d "${ROOT}/static" ] && rsync -a "${ROOT}/static/" ./static/ || true
+          [ -f "${ROOT}/config.yml" ] && cp -f "${ROOT}/config.yml" ./config.yml || true
+          [ -d "${ROOT}/docker_dst_config" ] && rsync -a "${ROOT}/docker_dst_config/" ./docker_dst_config/ || true
+          [ -d "${ROOT}/dst_config" ] && rsync -a "${ROOT}/dst_config/" ./dst_config/ || true
+
+      - name: Fallback to repo files when release assets missing
+        run: |
+          set -euo pipefail
+          [ -d dist ] || echo "No dist from release; will fail if repo also lacks dist"
+          [ -d static ] || [ ! -d ./static ] || echo "Using repo static as fallback"
+          [ -d docker_dst_config ] || [ ! -d ./docker_dst_config ] || echo "Using repo docker_dst_config as fallback"
+          [ -d dst_config ] || [ ! -d ./dst_config ] || echo "Using repo dst_config as fallback"
+          [ -f config.yml ] || [ ! -f ./config.yml ] || echo "Using repo config.yml as fallback"
+
+      - name: Validate dist presence
+        run: |
+          set -euo pipefail
+          if [ ! -f dist/index.html ]; then
+            echo "ERROR: dist/index.html not found after release extraction and fallback."
+            exit 1
+          fi
+
+      - name: Build ARM64 dst-admin-go from source
+        run: |
+          set -euo pipefail
+          set +e
+          echo "Attempt 1: CGO_DISABLED cross-compile to arm64"
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 GOFLAGS='-buildvcs=false' go build -o dst-admin-go .
+          STATUS=$?
+          set -e
+          if [ $STATUS -ne 0 ] || [ ! -s dst-admin-go ]; then
+            echo "Attempt 1 failed; Attempt 2: build inside linux/arm64 container with CGO"
+            docker run --rm --platform linux/arm64 -v "$PWD":/src -w /src golang:1.21 bash -c '
+              set -e
+              apt-get update && apt-get install -y --no-install-recommends gcc libsqlite3-dev ca-certificates && rm -rf /var/lib/apt/lists/*
+              export CGO_ENABLED=1 GOOS=linux GOARCH=arm64 GOFLAGS="-buildvcs=false"
+              go mod download
+              go build -o dst-admin-go .
+            '
+          fi
+          chmod +x dst-admin-go
+
+      - name: Assemble minimal build context with wrapper entrypoint
+        run: |
+          set -euo pipefail
+          CTX="${{ steps.prep.outputs.CTX }}"
+          mkdir -p "${CTX}"
+
+          cp -a dist "${CTX}/dist"
+          [ -d static ] && cp -a static "${CTX}/static" || true
+          [ -f config.yml ] && cp -a config.yml "${CTX}/config.yml" || true
+          [ -d docker_dst_config ] && cp -a docker_dst_config "${CTX}/docker_dst_config" || true
+          [ -d dst_config ] && cp -a dst_config "${CTX}/dst_config" || true
+          cp -a dst-admin-go "${CTX}/dst-admin-go"
+
+          # 入口脚本：方案二（wrapper），在 ARM64 上以 box86/box64 运行 steamcmd 与 DST 专服
+          cat > "${CTX}/docker-entrypoint.sh" <<'EOS'
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Basic limits for better stability
+ulimit -Sn 10000 || true
+
+# Paths and env (allow override by env)
+STEAMCMDDIR="${STEAMCMDDIR:-/steamcmd}"
+DST_DIR="${DST_DIR:-/app/dst-dedicated-server}"
+
+# Ensure box is present
+command -v box86 >/dev/null || { echo "box86 not found"; exit 1; }
+command -v box64 >/dev/null || { echo "box64 not found"; exit 1; }
+
+create_wrapper() {
+  # $1 = target binary path; $2 = boxer (box86|box64)
+  local target="$1" boxer="$2"
+  [ -e "$target" ] || return 0
+  local real="${target}.real"
+  if [ ! -e "$real" ]; then
+    mv "$target" "$real"
+  fi
+  cat > "$target" <<EOF
+#!/usr/bin/env bash
+exec ${boxer} "${real}" "\$@"
+EOF
+  chmod +x "$target"
+}
+
+# 1) Ensure steamcmd installed (image provides it), then wrap with box86
+mkdir -p "${STEAMCMDDIR}"
+if [ ! -e "${STEAMCMDDIR}/steamcmd.sh" ]; then
+  echo "steamcmd missing in image; attempting download..."
+  curl -fsSL https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz -o "${STEAMCMDDIR}/steamcmd_linux.tar.gz"
+  tar -xzf "${STEAMCMDDIR}/steamcmd_linux.tar.gz" -C "${STEAMCMDDIR}"
+  rm -f "${STEAMCMDDIR}/steamcmd_linux.tar.gz"
+fi
+create_wrapper "${STEAMCMDDIR}/steamcmd.sh" "box86"
+
+# 2) Ensure DST dedicated server installed (app_id 343050)
+mkdir -p "${DST_DIR}"
+if [ ! -e "${DST_DIR}/bin/dontstarve_dedicated_server_nullrenderer" ] && \
+   [ ! -e "${DST_DIR}/bin/dontstarve_dedicated_server_nullrenderer_x64" ]; then
+  "${STEAMCMDDIR}/steamcmd.sh" +force_install_dir "${DST_DIR}" +login anonymous +app_update 343050 validate +quit
+fi
+
+# 3) Wrap DST server binary with box64
+if [ -e "${DST_DIR}/bin/dontstarve_dedicated_server_nullrenderer_x64" ]; then
+  create_wrapper "${DST_DIR}/bin/dontstarve_dedicated_server_nullrenderer_x64" "box64"
+elif [ -e "${DST_DIR}/bin/dontstarve_dedicated_server_nullrenderer" ]; then
+  create_wrapper "${DST_DIR}/bin/dontstarve_dedicated_server_nullrenderer" "box64"
+fi
+
+# 4) Launch panel (ARM64 native)
+cd /app
+exec ./dst-admin-go
+EOS
+          chmod +x "${CTX}/docker-entrypoint.sh"
+
+          # 写入 Dockerfile（含多架构依赖 & box86/box64 & steamcmd）
+          cat > "${CTX}/Dockerfile" <<'EOF'
+FROM arm64v8/ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive LANG=C.UTF-8 TZ=Asia/Shanghai
+
+# Enable multi-arch and install base + i386/amd64 runtime libs for steamcmd/DST server
+RUN dpkg --add-architecture i386 && dpkg --add-architecture amd64 && \
+    apt-get update && apt-get install -y --no-install-recommends \
+      ca-certificates curl wget xz-utils unzip procps screen gnupg \
+      libc6:i386 libstdc++6:i386 libgcc-s1:i386 libcurl4:i386 zlib1g:i386 \
+      libc6:amd64 libstdc++6:amd64 libgcc-s1:amd64 libcurl4:amd64 zlib1g:amd64 && \
+    update-ca-certificates && rm -rf /var/lib/apt/lists/*
+
+# Prebuilt box86/box64
+RUN set -eux; \
+    echo "deb [arch=arm64] https://ryanfortner.github.io/box64-debs/ubuntu jammy main" > /etc/apt/sources.list.d/box64.list; \
+    echo "deb [arch=arm64] https://ryanfortner.github.io/box86-debs/ubuntu jammy main" > /etc/apt/sources.list.d/box86.list; \
+    curl -fsSL https://ryanfortner.github.io/box64-debs/REPO.KEY > /etc/apt/trusted.gpg.d/box64.gpg; \
+    curl -fsSL https://ryanfortner.github.io/box86-debs/REPO.KEY > /etc/apt/trusted.gpg.d/box86.gpg; \
+    apt-get update && apt-get install -y --no-install-recommends box64 box86 && \
+    rm -rf /var/lib/apt/lists/*
+
+# SteamCMD (i386)
+WORKDIR /steamcmd
+RUN curl -fsSL https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz -o steamcmd_linux.tar.gz && \
+    tar -xzf steamcmd_linux.tar.gz && rm steamcmd_linux.tar.gz
+
+# App runtime
+WORKDIR /app
+COPY dist /app/dist
+COPY dst-admin-go /app/dst-admin-go
+COPY docker-entrypoint.sh /app/docker-entrypoint.sh
+RUN chmod +x /app/dst-admin-go /app/docker-entrypoint.sh
+COPY static /app/static
+COPY config.yml /app/config.yml
+COPY docker_dst_config /app/docker_dst_config
+COPY dst_config /app/dst_config
+
+EXPOSE 8082/tcp 10888/udp 10998/udp 10999/udp
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
+EOF
+
+      - name: Set up buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push (linux/arm64)
+        run: |
+          set -euo pipefail
+          CTX="${{ steps.prep.outputs.CTX }}"
+          TAG="${{ inputs.tag }}-arm64"
+          docker buildx build \
+            --platform linux/arm64 \
+            -t "${IMAGE}:${TAG}" \
+            --push "${CTX}"
+
+      - name: Final summary
+        run: |
+          echo "Pushed image: ${IMAGE}:${{ inputs.tag }}-arm64"
