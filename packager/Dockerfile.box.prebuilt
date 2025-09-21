@@ -15,21 +15,23 @@ deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy-updates main
 deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy-security main
 EOF
 
-# 为 i386/amd64 分别配置 archive 源：仅 main，避免 404 且减少 binary-all 重复
+# 为 i386 配置 archive 源：仅 main
 RUN set -eux; \
     tee /etc/apt/sources.list.d/i386.list <<'EOF'
 deb [arch=i386] http://archive.ubuntu.com/ubuntu jammy main
 deb [arch=i386] http://archive.ubuntu.com/ubuntu jammy-updates main
 deb [arch=i386] http://archive.ubuntu.com/ubuntu jammy-security main
 EOF
-    ; \
+
+# 为 amd64 配置 archive 源：仅 main
+RUN set -eux; \
     tee /etc/apt/sources.list.d/amd64.list <<'EOF'
 deb [arch=amd64] http://archive.ubuntu.com/ubuntu jammy main
 deb [arch=amd64] http://archive.ubuntu.com/ubuntu jammy-updates main
 deb [arch=amd64] http://archive.ubuntu.com/ubuntu jammy-security main
 EOF
 
-# 更新并安装最小运行库（SteamCMD 用 i386；DST 专服用 amd64）
+# 更新并安装最小运行库（SteamCMD 用 i386；DST 专服用 amd64）与基础工具
 RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
@@ -38,7 +40,6 @@ RUN set -eux; \
       libc6:amd64 libstdc++6:amd64 libgcc-s1:amd64 libcurl4:amd64 zlib1g:amd64; \
     update-ca-certificates; \
     rm -rf /var/lib/apt/lists/*
-
 
 # 安装预编译 box86/box64（ARM64 上运行 x86/x86_64）
 RUN set -eux; \
