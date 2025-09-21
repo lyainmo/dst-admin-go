@@ -17,17 +17,17 @@ deb [arch=amd64] http://archive.ubuntu.com/ubuntu jammy main restricted universe
 deb [arch=amd64] http://archive.ubuntu.com/ubuntu jammy-updates main restricted universe multiverse
 deb [arch=amd64] http://archive.ubuntu.com/ubuntu jammy-security main restricted universe multiverse
 EOF
-    apt-get update; \
-    apt-get install -y --no-install-recommends \
-      ca-certificates curl wget xz-utils unzip procps screen gnupg \
-      # SteamCMD 需要的 i386 库
-      libc6:i386 libstdc++6:i386 libgcc-s1:i386 libcurl4:i386 zlib1g:i386 \
-      lib32gcc-s1 lib32stdc++6 \
-      # DST 专服需要的 amd64 库
-      libc6:amd64 libstdc++6:amd64 libgcc-s1:amd64 libcurl4:amd64 zlib1g:amd64 \
-    ; \
-    update-ca-certificates; \
-    rm -rf /var/lib/apt/lists/*
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
+         ca-certificates curl wget xz-utils unzip procps screen gnupg \
+         # SteamCMD 需要的 i386 库
+         libc6:i386 libstdc++6:i386 libgcc-s1:i386 libcurl4:i386 zlib1g:i386 \
+         lib32gcc-s1 lib32stdc++6 \
+         # DST 专服需要的 amd64 库
+         libc6:amd64 libstdc++6:amd64 libgcc-s1:amd64 libcurl4:amd64 zlib1g:amd64 \
+    && update-ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
 
 # 安装预编译 box86/box64
 RUN set -eux; \
