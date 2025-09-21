@@ -41,15 +41,6 @@ RUN set -eux; \
     update-ca-certificates; \
     rm -rf /var/lib/apt/lists/*
 
-# 安装预编译 box86/box64（ARM64 上运行 x86/x86_64）
-RUN set -eux; \
-    echo "deb [arch=arm64] https://ryanfortner.github.io/box64-debs/ubuntu jammy main" > /etc/apt/sources.list.d/box64.list; \
-    echo "deb [arch=arm64] https://ryanfortner.github.io/box86-debs/ubuntu jammy main" > /etc/apt/sources.list.d/box86.list; \
-    curl -fsSL https://ryanfortner.github.io/box64-debs/KEY.gpg > /etc/apt/trusted.gpg.d/box64.gpg; \
-    curl -fsSL https://ryanfortner.github.io/box86-debs/KEY.gpg > /etc/apt/trusted.gpg.d/box86.gpg; \
-    apt-get update && apt-get install -y --no-install-recommends box64 box86 && \
-    rm -rf /var/lib/apt/lists/*
-
 # 安装 SteamCMD（官方包，避免 apt 变数）
 WORKDIR /steamcmd
 RUN curl -fsSL https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz -o steamcmd_linux.tar.gz && \
