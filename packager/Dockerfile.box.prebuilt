@@ -2,47 +2,42 @@ FROM arm64v8/ubuntu:22.04
 
 ENV DEBIAN_FRONTEND=noninteractive LANG=C.UTF-8 TZ=Asia/Shanghai
 
-# 启用 i386/amd64 架构，并为它们配置 archive 源
+# 启用多架构（i386/amd64）
 RUN set -eux; \
     dpkg --add-architecture i386; \
-    dpkg --add-architecture amd64; \
-    # arm64 主架构源
-    sed -i 's|http://ports.ubuntu.com/ubuntu-ports|http://ports.ubuntu.com/ubuntu-ports|g' /etc/apt/sources.list; \
-    # i386 源
+    dpkg --add-architecture amd64
+
+# arm64 主架构源（保持 ports 默认即可；如需国内镜像，可改为 ubuntu-ports 的镜像站）
+RUN set -eux; \
+    sed -i 's|http://ports.ubuntu.com/ubuntu-ports|http://ports.ubuntu.com/ubuntu-ports|g' /etc/apt/sources.list
+
+# i386 源（使用 archive 系列；如在国内，可替换为阿里/清华等 ubuntu 镜像）
+RUN set -eux; \
     tee /etc/apt/sources.list.d/i386.list <<'EOF'
 deb [arch=i386] http://archive.ubuntu.com/ubuntu jammy main
 deb [arch=i386] http://archive.ubuntu.com/ubuntu jammy-updates main
 deb [arch=i386] http://archive.ubuntu.com/ubuntu jammy-security main
 EOF
-    # amd64 源
+
+# amd64 源（同上，走 archive 系列；不要和 i386 混写在同一文件，避免 binary-all 重复）
+RUN set -eux; \
     tee /etc/apt/sources.list.d/amd64.list <<'EOF'
 deb [arch=amd64] http://archive.ubuntu.com/ubuntu jammy main
 deb [arch=amd64] http://archive.ubuntu.com/ubuntu jammy-updates main
 deb [arch=amd64] http://archive.ubuntu.com/ubuntu jammy-security main
 EOF
-    apt-get update; \
-    apt-get install -y --no-install-recommends \
-         ca-certificates curl wget xz-utils unzip procps screen gnupg \
-         libc6:i386 libstdc++6:i386 libgcc-s1:i386 libcurl4:i386 zlib1g:i386 \
-         libc6:amd64 libstdc++6:amd64 libgcc-s1:amd64 libcurl4:amd64 zlib1g:amd64 \
-    && update-ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
 
-
-# 更新并安装依赖
+# 更新并安装运行库与基础工具（先保证基础通过；可按需再加 lib32gcc-s1/lib32stdc++6）
 RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
-         ca-certificates curl wget xz-utils unzip procps screen gnupg \
-         # SteamCMD 需要的 i386 库
-         libc6:i386 libstdc++6:i386 libgcc-s1:i386 libcurl4:i386 zlib1g:i386 \
-         lib32gcc-s1 lib32stdc++6 \
-         # DST 专服需要的 amd64 库
-         libc6:amd64 libstdc++6:amd64 libgcc-s1:amd64 libcurl4:amd64 zlib1g:amd64; \
+      ca-certificates curl wget xz-utils unzip procps screen gnupg \
+      libc6:i386 libstdc++6:i386 libgcc-s1:i386 libcurl4:i386 zlib1g:i386 \
+      libc6:amd64 libstdc++6:amd64 libgcc-s1:amd64 libcurl4:amd64 zlib1g:amd64; \
     update-ca-certificates; \
     rm -rf /var/lib/apt/lists/*
 
-# 安装预编译 box86/box64
+# 安装预编译 box86/box64（ARM64 上运行 x86/x86_64）
 RUN set -eux; \
     echo "deb [arch=arm64] https://ryanfortner.github.io/box64-debs/ubuntu jammy main" > /etc/apt/sources.list.d/box64.list; \
     echo "deb [arch=arm64] https://ryanfortner.github.io/box86-debs/ubuntu jammy main" > /etc/apt/sources.list.d/box86.list; \
@@ -51,12 +46,12 @@ RUN set -eux; \
     apt-get update && apt-get install -y --no-install-recommends box64 box86 && \
     rm -rf /var/lib/apt/lists/*
 
-# 安装 SteamCMD（官方包）
+# 安装 SteamCMD（官方包，避免 apt 变数）
 WORKDIR /steamcmd
 RUN curl -fsSL https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz -o steamcmd_linux.tar.gz && \
     tar -xzf steamcmd_linux.tar.gz && rm steamcmd_linux.tar.gz
 
-# 复制运行所需文件
+# 复制运行所需文件（CI 会保证存在；若部分可选缺失，建议在 CI 中创建占位）
 WORKDIR /app
 COPY dist /app/dist
 COPY dst-admin-go /app/dst-admin-go
