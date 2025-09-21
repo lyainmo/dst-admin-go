@@ -6,17 +6,28 @@ ENV DEBIAN_FRONTEND=noninteractive LANG=C.UTF-8 TZ=Asia/Shanghai
 RUN set -eux; \
     dpkg --add-architecture i386; \
     dpkg --add-architecture amd64; \
-    # arm64 主架构源（ports）
+    # arm64 主架构源
     sed -i 's|http://ports.ubuntu.com/ubuntu-ports|http://ports.ubuntu.com/ubuntu-ports|g' /etc/apt/sources.list; \
-    # i386/amd64 架构源（archive，可换成国内镜像）
-    tee /etc/apt/sources.list.d/multiarch.list <<'EOF'
-deb [arch=i386] http://archive.ubuntu.com/ubuntu jammy main restricted universe multiverse
-deb [arch=i386] http://archive.ubuntu.com/ubuntu jammy-updates main restricted universe multiverse
-deb [arch=i386] http://archive.ubuntu.com/ubuntu jammy-security main restricted universe multiverse
-deb [arch=amd64] http://archive.ubuntu.com/ubuntu jammy main restricted universe multiverse
-deb [arch=amd64] http://archive.ubuntu.com/ubuntu jammy-updates main restricted universe multiverse
-deb [arch=amd64] http://archive.ubuntu.com/ubuntu jammy-security main restricted universe multiverse
+    # i386 源
+    tee /etc/apt/sources.list.d/i386.list <<'EOF'
+deb [arch=i386] http://archive.ubuntu.com/ubuntu jammy main
+deb [arch=i386] http://archive.ubuntu.com/ubuntu jammy-updates main
+deb [arch=i386] http://archive.ubuntu.com/ubuntu jammy-security main
 EOF
+    # amd64 源
+    tee /etc/apt/sources.list.d/amd64.list <<'EOF'
+deb [arch=amd64] http://archive.ubuntu.com/ubuntu jammy main
+deb [arch=amd64] http://archive.ubuntu.com/ubuntu jammy-updates main
+deb [arch=amd64] http://archive.ubuntu.com/ubuntu jammy-security main
+EOF
+    apt-get update; \
+    apt-get install -y --no-install-recommends \
+         ca-certificates curl wget xz-utils unzip procps screen gnupg \
+         libc6:i386 libstdc++6:i386 libgcc-s1:i386 libcurl4:i386 zlib1g:i386 \
+         libc6:amd64 libstdc++6:amd64 libgcc-s1:amd64 libcurl4:amd64 zlib1g:amd64 \
+    && update-ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
 
 # 更新并安装依赖
 RUN set -eux; \
