@@ -45,8 +45,8 @@ RUN set -eux; \
 RUN set -eux; \
     echo "deb [arch=arm64] https://ryanfortner.github.io/box64-debs/ubuntu jammy main" > /etc/apt/sources.list.d/box64.list; \
     echo "deb [arch=arm64] https://ryanfortner.github.io/box86-debs/ubuntu jammy main" > /etc/apt/sources.list.d/box86.list; \
-    curl -fsSL https://ryanfortner.github.io/box64-debs/REPO.KEY > /etc/apt/trusted.gpg.d/box64.gpg; \
-    curl -fsSL https://ryanfortner.github.io/box86-debs/REPO.KEY > /etc/apt/trusted.gpg.d/box86.gpg; \
+    curl -fsSL https://ryanfortner.github.io/box64-debs/KEY.gpg > /etc/apt/trusted.gpg.d/box64.gpg; \
+    curl -fsSL https://ryanfortner.github.io/box86-debs/KEY.gpg > /etc/apt/trusted.gpg.d/box86.gpg; \
     apt-get update && apt-get install -y --no-install-recommends box64 box86 && \
     rm -rf /var/lib/apt/lists/*
 
