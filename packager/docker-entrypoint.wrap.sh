@@ -6,7 +6,7 @@ ulimit -Sn 10000 || true
 
 # 目录与环境
 STEAMCMDDIR="${STEAMCMDDIR:-/steamcmd}"
-="${:-/app/dst-dedicated-server}"
+DST_DIR="${:-/app/dst-dedicated-server}"
 KLEI_DIR="${KLEI_DIR:-/root/.klei/DoNotStarveTogether}"
 CLUSTER_NAME="${CLUSTER_NAME:-MyDediServer}"
 
