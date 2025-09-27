@@ -38,7 +38,7 @@ RUN set -eux; \
       ca-certificates curl wget xz-utils unzip procps screen gnupg \
       libc6:i386 libstdc++6:i386 libgcc-s1:i386 libcurl4:i386 zlib1g:i386 \
       libc6:amd64 libstdc++6:amd64 libgcc-s1:amd64 libcurl4:amd64 zlib1g:amd64 \
-      libc6:arm64 libstdc++6:armhf libgcc-s1:armhf; \
+      libc6:arm64 libstdc++6:armhf libgcc-s1:armhf \
     update-ca-certificates; \
     rm -rf /var/lib/apt/lists/*
 
