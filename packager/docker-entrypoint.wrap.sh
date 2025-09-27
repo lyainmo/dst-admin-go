@@ -204,12 +204,12 @@ fi
 
 echo "[entrypoint] wrap DST server binaries if present"
 # x64 二进制交给 box64
-if [ -e "${}/bin/dontstarve_dedicated_server_nullrenderer_x64" ]; then
+if [ -e "${DST_DIR}/bin/dontstarve_dedicated_server_nullrenderer_x64" ]; then
   create_wrapper "${DST_DIR}/bin/dontstarve_dedicated_server_nullrenderer_x64" "box64"
 fi
 # 如果存在非 x64 的 nullrenderer（32 位 ELF），交给 box86
 if [ -e "${DST_DIR}/bin/dontstarve_dedicated_server_nullrenderer" ]; then
-  create_wrapper "${}/bin/dontstarve_dedicated_server_nullrenderer" "box86"
+  create_wrapper "${DST_DIR}/bin/dontstarve_dedicated_server_nullrenderer" "box86"
 fi
 
 
@@ -223,7 +223,7 @@ fi
 if [ ! -f "/app/dst_config/dst_config" ]; then
   cat > /app/dst_config/dst_config <<CFG
 steamcmd=${STEAMCMDDIR}
-force_install_dir=${}
+force_install_dir=${DST_DIR}
 cluster=${CLUSTER_NAME}
 backup=${KLEI_DIR}/backup
 mod_download_path=${KLEI_DIR}/download_mod
