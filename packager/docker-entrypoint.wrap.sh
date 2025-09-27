@@ -212,6 +212,41 @@ if [ -e "${DST_DIR}/bin/dontstarve_dedicated_server_nullrenderer" ]; then
   create_wrapper "${DST_DIR}/bin/dontstarve_dedicated_server_nullrenderer" "box86"
 fi
 
+#SteamCMD、饥荒专服下载
+echo "[entrypoint] ensure steamcmd exists"
+mkdir -p "${STEAMCMDDIR}"
+retry=1
+while [ ! -e "${STEAMCMDDIR}/steamcmd.sh" ]; do
+  if [ $retry -gt 3 ]; then
+    echo "Download steamcmd failed after three times"
+    exit -2
+  fi
+  echo "Not found steamcmd, start to installing steamcmd, try: ${retry}"
+  wget http://media.steampowered.com/installer/steamcmd_linux.tar.gz -P "${STEAMCMDDIR}"
+  tar -zxvf "${STEAMCMDDIR}/steamcmd_linux.tar.gz" -C "${STEAMCMDDIR}"
+  rm -f "${STEAMCMDDIR}/steamcmd_linux.tar.gz"
+  sleep 3
+  ((retry++))
+done
+
+echo "[entrypoint] ensure DST dedicated server installed"
+mkdir -p "${DST_DIR}"
+retry=1
+while [ ! -e "${DST_DIR}/bin/dontstarve_dedicated_server_nullrenderer" ] && \
+      [ ! -e "${DST_DIR}/bin/dontstarve_dedicated_server_nullrenderer_x64" ]; do
+  if [ $retry -gt 3 ]; then
+    echo "Download Dont Starve Together Server failed after three times"
+    exit -2
+  fi
+  echo "Not found DST server, start to installing, try: ${retry}"
+  bash "${STEAMCMDDIR}/steamcmd.sh" \
+    +force_install_dir "${DST_DIR}" \
+    +login anonymous \
+    +app_update 343050 validate \
+    +quit
+  sleep 3
+  ((retry++))
+done
 
 echo "[entrypoint] ensure Klei dirs and minimal dst_config"
 mkdir -p "${KLEI_DIR}/${CLUSTER_NAME}" "${KLEI_DIR}/backup" "${KLEI_DIR}/download_mod"
