@@ -6,7 +6,7 @@ ulimit -Sn 10000 || true
 
 # 目录与环境
 STEAMCMDDIR="${STEAMCMDDIR:-/steamcmd}"
-DST_DIR="${DST_DIR:-/app/dst-dedicated-server}"
+="${:-/app/dst-dedicated-server}"
 KLEI_DIR="${KLEI_DIR:-/root/.klei/DoNotStarveTogether}"
 CLUSTER_NAME="${CLUSTER_NAME:-MyDediServer}"
 
@@ -67,10 +67,8 @@ detect_target_box64() {
   local cpuinfo; cpuinfo="$(tr '[:upper:]' '[:lower:]' < /proc/cpuinfo)"
   if grep -q 'rk3588' <<<"$cpuinfo"; then echo box64-rk3588; return; fi
   if grep -q 'rk3399' <<<"$cpuinfo"; then echo box64-rk3399; return; fi
-  if grep -q 'tegra'  <<<"$cpuinfo"; then
-    if grep -q 't194' <<<"$cpuinfo"; then echo box64-tegra-t194; return; fi
-    echo box64-tegrax1; return
-  fi
+  if grep -q 'tegra'  <<<"$cpuinfo"; then echo box64-tegrax1; return; fi
+  if grep -q 't194' <<<"$cpuinfo"; then echo box64-tegra-t194; return; fi
   if grep -qi 'raspberry' /proc/device-tree/model 2>/dev/null; then
     if grep -qi 'Raspberry Pi 5' /proc/device-tree/model 2>/dev/null; then
       echo box64-rpi5arm64; return
@@ -140,8 +138,6 @@ install_box86_if_needed() {
   if [ "$arch" = "aarch64" ] || [ "$arch" = "arm64" ]; then
     log "Enable armhf multiarch for box86 on arm64"
     dpkg --add-architecture armhf || true
-    apt_update_safe
-    apt-get install -y --no-install-recommends libc6:armhf libstdc++6:armhf libgcc-s1:armhf
   fi
 
   local list_url="https://ryanfortner.github.io/box86-debs/box86.list"
@@ -180,7 +176,7 @@ install_box86_if_needed || true
 command -v box86 >/dev/null || { echo "box86 not found"; exit 1; }
 command -v box64 >/dev/null || { echo "box64 not found"; exit 1; }
 
-# 将目标 ELF 包裹到 box86/box64 下运行
+# 将目标 ELF 包裹到 box86/box64 下运行（仅限 ELF，不包裹脚本）
 create_wrapper() {
   # $1=target; $2=boxer (box86|box64)
   local target="$1" boxer="$2"
@@ -196,31 +192,26 @@ EOF
   chmod +x "$target"
 }
 
-echo "[entrypoint] ensure steamcmd exists"
-mkdir -p "${STEAMCMDDIR}"
-if [ ! -e "${STEAMCMDDIR}/steamcmd.sh" ]; then
-  curl -fsSL https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz -o "${STEAMCMDDIR}/steamcmd_linux.tar.gz"
-  tar -xzf "${STEAMCMDDIR}/steamcmd_linux.tar.gz" -C "${STEAMCMDDIR}"
-  rm -f "${STEAMCMDDIR}/steamcmd_linux.tar.gz"
+# 自愈：如果历史遗留了 steamcmd.sh.real，恢复为原始脚本
+if [ -e "${STEAMCMDDIR}/steamcmd.sh.real" ]; then
+  mv -f "${STEAMCMDDIR}/steamcmd.sh.real" "${STEAMCMDDIR}/steamcmd.sh"
 fi
-# steamcmd 是 i386，可用 box86 包裹
-create_wrapper "${STEAMCMDDIR}/steamcmd.sh" "box86"
 
-echo "[entrypoint] ensure DST dedicated server installed"
-mkdir -p "${DST_DIR}"
-if [ ! -e "${DST_DIR}/bin/dontstarve_dedicated_server_nullrenderer" ] && \
-   [ ! -e "${DST_DIR}/bin/dontstarve_dedicated_server_nullrenderer_x64" ]; then
-  "${STEAMCMDDIR}/steamcmd.sh" +force_install_dir "${DST_DIR}" +login anonymous +app_update 343050 validate +quit
+# 只包裹真正的 ELF：steamcmd 的入口 ELF 是 linux32/steamcmd
+if [ -e "${STEAMCMDDIR}/linux32/steamcmd" ]; then
+  create_wrapper "${STEAMCMDDIR}/linux32/steamcmd" "box86"
 fi
 
 echo "[entrypoint] wrap DST server binaries if present"
-if [ -e "${DST_DIR}/bin/dontstarve_dedicated_server_nullrenderer_x64" ]; then
+# x64 二进制交给 box64
+if [ -e "${}/bin/dontstarve_dedicated_server_nullrenderer_x64" ]; then
   create_wrapper "${DST_DIR}/bin/dontstarve_dedicated_server_nullrenderer_x64" "box64"
 fi
+# 如果存在非 x64 的 nullrenderer（32 位 ELF），交给 box86
 if [ -e "${DST_DIR}/bin/dontstarve_dedicated_server_nullrenderer" ]; then
-  # 非必须，但也包一层（如是 32 位则用 box86）
-  create_wrapper "${DST_DIR}/bin/dontstarve_dedicated_server_nullrenderer" "box86"
+  create_wrapper "${}/bin/dontstarve_dedicated_server_nullrenderer" "box86"
 fi
+
 
 echo "[entrypoint] ensure Klei dirs and minimal dst_config"
 mkdir -p "${KLEI_DIR}/${CLUSTER_NAME}" "${KLEI_DIR}/backup" "${KLEI_DIR}/download_mod"
@@ -232,7 +223,7 @@ fi
 if [ ! -f "/app/dst_config/dst_config" ]; then
   cat > /app/dst_config/dst_config <<CFG
 steamcmd=${STEAMCMDDIR}
-force_install_dir=${DST_DIR}
+force_install_dir=${}
 cluster=${CLUSTER_NAME}
 backup=${KLEI_DIR}/backup
 mod_download_path=${KLEI_DIR}/download_mod
