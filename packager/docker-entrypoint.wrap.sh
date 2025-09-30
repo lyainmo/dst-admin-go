@@ -133,7 +133,6 @@ install_box86_if_needed() {
   need_root
   pkg_ensure_tools
 
-  # 在 arm64 主机上需要启用 armhf 并准备基础库
   local arch; arch="$(uname -m)"
   if [ "$arch" = "aarch64" ] || [ "$arch" = "arm64" ]; then
     log "Enable armhf multiarch for box86 on arm64"
@@ -151,7 +150,6 @@ install_box86_if_needed() {
 
   apt_update_safe
   local pkg; pkg="$(detect_target_box86)"
-  # arm64 主机安装 armhf 包需要显式 :armhf
   if [ "$arch" = "aarch64" ] || [ "$arch" = "arm64" ]; then
     pkg="${pkg}:armhf"
   fi
@@ -176,7 +174,7 @@ install_box86_if_needed || true
 command -v box86 >/dev/null || { echo "box86 not found"; exit 1; }
 command -v box64 >/dev/null || { echo "box64 not found"; exit 1; }
 
-#SteamCMD、饥荒专服下载
+#SteamCMD下载
 echo "[entrypoint] ensure steamcmd exists"
 mkdir -p "${STEAMCMDDIR}"
 retry=1
@@ -193,6 +191,28 @@ while [ ! -e "${STEAMCMDDIR}/steamcmd.sh" ]; do
   ((retry++))
 done
 
+#定义包裹操作函数
+create_wrapper() {
+  # $1=target; $2=boxer (box86|box64)
+  local target="$1" boxer="$2"
+  [ -e "$target" ] || return 0
+  local real="${target}.real"
+  if [ ! -e "$real" ]; then
+    mv "$target" "$real"
+  fi
+  cat > "$target" <<EOF
+#!/usr/bin/env bash
+exec ${boxer} "${real}" "\$@"
+EOF
+  chmod +x "$target"
+}
+
+#包裹SteamCmd
+if [ -e "${STEAMCMDDIR}/linux32/steamcmd" ]; then
+  create_wrapper "${STEAMCMDDIR}/linux32/steamcmd" "box86"
+fi
+
+#安装饥荒服务端
 echo "[entrypoint] ensure DST dedicated server installed"
 mkdir -p "${DST_DIR}"
 retry=1
@@ -211,42 +231,14 @@ while [ ! -e "${DST_DIR}/bin/dontstarve_dedicated_server_nullrenderer" ] && \
   sleep 3
   ((retry++))
 done
-
-# 将目标 ELF 包裹到 box86/box64 下运行（仅限 ELF，不包裹脚本）
-create_wrapper() {
-  # $1=target; $2=boxer (box86|box64)
-  local target="$1" boxer="$2"
-  [ -e "$target" ] || return 0
-  local real="${target}.real"
-  if [ ! -e "$real" ]; then
-    mv "$target" "$real"
-  fi
-  cat > "$target" <<EOF
-#!/usr/bin/env bash
-exec ${boxer} "${real}" "\$@"
-EOF
-  chmod +x "$target"
-}
-
-# 自愈：如果历史遗留了 steamcmd.sh.real，恢复为原始脚本
-if [ -e "${STEAMCMDDIR}/steamcmd.sh.real" ]; then
-  mv -f "${STEAMCMDDIR}/steamcmd.sh.real" "${STEAMCMDDIR}/steamcmd.sh"
-fi
-
-# 只包裹真正的 ELF：steamcmd 的入口 ELF 是 linux32/steamcmd
-if [ -e "${STEAMCMDDIR}/linux32/steamcmd" ]; then
-  create_wrapper "${STEAMCMDDIR}/linux32/steamcmd" "box86"
-fi
-
-echo "[entrypoint] wrap DST server binaries if present"
-# x64 二进制交给 box64
+#包裹饥荒二进制文件
 if [ -e "${DST_DIR}/bin/dontstarve_dedicated_server_nullrenderer_x64" ]; then
   create_wrapper "${DST_DIR}/bin/dontstarve_dedicated_server_nullrenderer_x64" "box64"
 fi
-# 如果存在非 x64 的 nullrenderer（32 位 ELF），交给 box86
-if [ -e "${DST_DIR}/bin/dontstarve_dedicated_server_nullrenderer" ]; then
+
+'''if [ -e "${DST_DIR}/bin/dontstarve_dedicated_server_nullrenderer" ]; then
   create_wrapper "${DST_DIR}/bin/dontstarve_dedicated_server_nullrenderer" "box86"
-fi
+fi'''
 
 echo "[entrypoint] ensure Klei dirs and minimal dst_config"
 mkdir -p "${KLEI_DIR}/${CLUSTER_NAME}" "${KLEI_DIR}/backup" "${KLEI_DIR}/download_mod"
@@ -268,4 +260,3 @@ fi
 echo "[entrypoint] launch panel"
 cd /app
 exec ./dst-admin-go
-
