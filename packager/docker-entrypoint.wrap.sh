@@ -84,7 +84,7 @@ install_box64_if_needed() {
   local key_url="https://ryanfortner.github.io/box64-debs/KEY.gpg"
   local keyring="/etc/apt/trusted.gpg.d/box64-debs-archive-keyring.gpg"
 
-  # 可选：中国大陆镜像（官方页面注明第三方镜像，风险自担）
+  # 可选：中国大陆镜像（官方页面注明第三方镜像，有风险）
   if [ "${USE_BOX64_CN_MIRROR:-0}" = "1" ]; then
     list_url="https://cdn05042023.gitlink.org.cn/shenmo7192/box64-debs/raw/branch/master/box64-CN.list"
     key_url="https://cdn05042023.gitlink.org.cn/shenmo7192/box64-debs/raw/branch/master/KEY.gpg"
