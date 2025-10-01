@@ -1,19 +1,31 @@
-##修改了镜像、docker-entrypoint.sh
-主要改动在于packager/docker-entrypoint.warp.sh，添加了安装box64的步骤
-目前可以手动运行steamcmd和dst专服，无法通过面板启动，其他功能未见异常
-为了适配，需要面板在运行二进制文件时前面加上box64，如 box64 /steamcmd/linux32/steamcmd
-此外，还不能使用steamcmd.sh，而应当直接使用二进制。因为无法在它启动二进制的命令前添上box64
+## 通过box64可以很好地运行dst和steamcmd，但还需面板做些适配
 
-为了不改动面板，此前尝试过这种做法
-mv /steamcmd/linux32/steamcmd /steamcmd/linux32/steamcmd.real
-将/steamcmd/linux32/steamcmd改为脚本
-#!/usr/bin/env bash
-exec box64 /steamcmd/linux32/steamcmd.real "$@"
-但是steamcmd会校验并自愈，行不通
+本分支在原版基础上做了以下调整：
 
-还尝试过box推荐的binfmt_misc方案
-可以在不修改面板程序时正常运行
-但必须修改宿主机内核，有违docker理念
+- **镜像与入口脚本**
+  - 修改 `docker-entrypoint.sh`，位于 `packager/docker-entrypoint.wrap.sh`。
+  - 在入口脚本中增加了box64 安装步骤，用于兼容amd64/i386。
+
+- **SteamCMD 适配**
+  - 目前可以在容器内手动运行 `steamcmd` 与 DST 专服，功能正常。
+  - 由于 SteamCMD 会自愈覆盖自身 ELF，因此：
+    - 不能使用 `steamcmd.sh`（它内部调用 ELF 时无法加上 box 前缀）。
+    - 必须直接调用二进制，并在前面显式加上 `box86` 或 `box64`，例如：
+      ```
+      box64 /steamcmd/linux32/steamcmd +login anonymous ...
+      box64 /data/dst/bin/dontstarve_dedicated_server_nullrenderer_x64 ...
+      ```
+
+- **目前需要面板做的兼容**
+  - 现阶段面板启动二进制时未自动加上 box 前缀，因此无法直接通过面板启动专服。
+  - 其他面板功能（配置、管理、备份等）未见异常。
+
+- **尝试过的替代方案**
+  - 使用命令前面加box64的脚本替换`steamcmd`，被 SteamCMD 自愈覆盖，行不通。
+  - 使用box推荐的 `binfmt_misc`方法，**可以在不修改面板的情况下正常运行**， 但是必须需要修改宿主机内核环境，不符合docker初衷。
+
+> 总来说就是，需要面板在启动二进制文件时在前面加上box64。
+
 
 
 # dst-admin-go
