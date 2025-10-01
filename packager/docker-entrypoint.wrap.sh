@@ -24,7 +24,7 @@ apt_update_safe() {
 }
 
 add_repo_if_missing() {
-  # $1=name(box86|box64) $2=list_url $3=key_url $4=keyring_path
+  # $1=name(box64) $2=list_url $3=key_url $4=keyring_path
   local name="$1" list_url="$2" key_url="$3" keyring="$4"
   local list_file="/etc/apt/sources.list.d/${name}.list"
 
