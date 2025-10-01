@@ -71,18 +71,6 @@ detect_target_box64() {
   echo box64
 }
 
-detect_target_box86() {
-  # 一些平台有优化，否则使用通用包
-  local cpuinfo; cpuinfo="$(tr '[:upper:]' '[:lower:]' < /proc/cpuinfo)"
-  if grep -q 'rk3588' <<<"$cpuinfo"; then echo box86-rk3588; return; fi
-  if grep -q 'rk3399' <<<"$cpuinfo"; then echo box86-rk3399; return; fi
-  if grep -q 'tegra'  <<<"$cpuinfo"; then echo box86-tegrax1; return; fi
-  if grep -qi 'raspberry' /proc/device-tree/model 2>/dev/null; then
-    echo box86-rpi4arm64; return
-  fi
-  echo box86-generic-arm
-}
-
 install_box64_if_needed() {
   if command -v box64 >/dev/null 2>&1; then
     log "box64 already installed: $(box64 -v 2>/dev/null || true)"
@@ -118,53 +106,10 @@ install_box64_if_needed() {
   fi
 }
 
-install_box86_if_needed() {
-  if command -v box86 >/dev/null 2>&1; then
-    log "box86 already installed: $(box86 -v 2>/dev/null || true)"
-    return 0
-  fi
-  need_root
-  pkg_ensure_tools
-
-  local arch; arch="$(uname -m)"
-  if [ "$arch" = "aarch64" ] || [ "$arch" = "arm64" ]; then
-    log "Enable armhf multiarch for box86 on arm64"
-    dpkg --add-architecture armhf || true
-  fi
-
-  local list_url="https://ryanfortner.github.io/box86-debs/box86.list"
-  local key_url="https://ryanfortner.github.io/box86-debs/KEY.gpg"
-  local keyring="/etc/apt/trusted.gpg.d/box86-debs-archive-keyring.gpg"
-
-  if ! add_repo_if_missing "box86" "$list_url" "$key_url" "$keyring"; then
-    log "WARN: failed to add box86 repo/key; skip install for now"
-    return 1
-  fi
-
-  apt_update_safe
-  local pkg; pkg="$(detect_target_box86)"
-  if [ "$arch" = "aarch64" ] || [ "$arch" = "arm64" ]; then
-    pkg="${pkg}:armhf"
-  fi
-
-  log "Installing box86 package: $pkg"
-  if ! apt-get install -y --no-install-recommends "$pkg"; then
-    log "WARN: install $pkg failed, fallback to generic"
-    local fallback="box86-generic-arm"
-    if [ "$arch" = "aarch64" ] || [ "$arch" = "arm64" ]; then
-      fallback="${fallback}:armhf"
-    fi
-    apt-get install -y --no-install-recommends "$fallback" || {
-      log "ERROR: box86 install failed"; return 1; }
-  fi
-}
-
-# 运行时确保已安装 box64/box86（按需）
+# 运行时确保已安装 box64
 install_box64_if_needed || true
-install_box86_if_needed || true
 
 # 若仍未安装，则直接报错退出
-command -v box86 >/dev/null || { echo "box86 not found"; exit 1; }
 command -v box64 >/dev/null || { echo "box64 not found"; exit 1; }
 
 #SteamCMD下载
@@ -198,7 +143,7 @@ while [ ! -e "${DST_DIR}/bin/dontstarve_dedicated_server_nullrenderer" ] && \
   echo "Not found DST server, start to installing, try: ${retry}"
   
   bash "${STEAMCMDDIR}/steamcmd.sh" \
-    || box86 "${STEAMCMDDIR}/linux32/steamcmd" \
+    || box64 "${STEAMCMDDIR}/linux32/steamcmd" \
        +force_install_dir "${DST_DIR}" \
        +login anonymous \
        +app_update 343050 validate \
