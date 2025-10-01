@@ -19,13 +19,6 @@ need_root() {
   fi
 }
 
-pkg_ensure_tools() {
-  # 这些工具在 Dockerfile 中通常已装；这里兜底
-  apt-get update -y || true
-  apt-get install -y --no-install-recommends ca-certificates wget curl gnupg || true
-  update-ca-certificates || true
-}
-
 apt_update_safe() {
   apt-get update -y || (sleep 2 && apt-get update -y)
 }
@@ -63,7 +56,7 @@ add_repo_if_missing() {
 }
 
 detect_target_box64() {
-  # 返回 box64 目标包名：优先特定平台，回退 box64
+  # 一些平台有优化，否则使用通用包
   local cpuinfo; cpuinfo="$(tr '[:upper:]' '[:lower:]' < /proc/cpuinfo)"
   if grep -q 'rk3588' <<<"$cpuinfo"; then echo box64-rk3588; return; fi
   if grep -q 'rk3399' <<<"$cpuinfo"; then echo box64-rk3399; return; fi
@@ -79,7 +72,7 @@ detect_target_box64() {
 }
 
 detect_target_box86() {
-  # 返回 box86 目标包名（均为 armhf 包，arm64 主机安装需 :armhf）
+  # 一些平台有优化，否则使用通用包
   local cpuinfo; cpuinfo="$(tr '[:upper:]' '[:lower:]' < /proc/cpuinfo)"
   if grep -q 'rk3588' <<<"$cpuinfo"; then echo box86-rk3588; return; fi
   if grep -q 'rk3399' <<<"$cpuinfo"; then echo box86-rk3399; return; fi
@@ -170,7 +163,7 @@ install_box86_if_needed() {
 install_box64_if_needed || true
 install_box86_if_needed || true
 
-# 若仍未安装，则直接报错退出（你的原始逻辑）
+# 若仍未安装，则直接报错退出
 command -v box86 >/dev/null || { echo "box86 not found"; exit 1; }
 command -v box64 >/dev/null || { echo "box64 not found"; exit 1; }
 
@@ -191,26 +184,6 @@ while [ ! -e "${STEAMCMDDIR}/steamcmd.sh" ]; do
   ((retry++))
 done
 
-#定义包裹操作函数
-create_wrapper() {
-  # $1=target; $2=boxer (box86|box64)
-  local target="$1" boxer="$2"
-  [ -e "$target" ] || return 0
-  local real="${target}.real"
-  if [ ! -e "$real" ]; then
-    mv "$target" "$real"
-  fi
-  cat > "$target" <<EOF
-#!/usr/bin/env bash
-exec ${boxer} "${real}" "\$@"
-EOF
-  chmod +x "$target"
-}
-
-#包裹SteamCmd
-if [ -e "${STEAMCMDDIR}/linux32/steamcmd" ]; then
-  create_wrapper "${STEAMCMDDIR}/linux32/steamcmd" "box86"
-fi
 
 #安装饥荒服务端
 echo "[entrypoint] ensure DST dedicated server installed"
@@ -223,7 +196,8 @@ while [ ! -e "${DST_DIR}/bin/dontstarve_dedicated_server_nullrenderer" ] && \
     exit -2
   fi
   echo "Not found DST server, start to installing, try: ${retry}"
-  bash "${STEAMCMDDIR}/steamcmd.sh" \
+  bash "${STEAMCMDDIR}/steamcmd.sh"
+  bash "box86 ${STEAMCMDDIR}/linux32/steamcmd" \
     +force_install_dir "${DST_DIR}" \
     +login anonymous \
     +app_update 343050 validate \
@@ -231,14 +205,7 @@ while [ ! -e "${DST_DIR}/bin/dontstarve_dedicated_server_nullrenderer" ] && \
   sleep 3
   ((retry++))
 done
-#包裹饥荒二进制文件
-if [ -e "${DST_DIR}/bin/dontstarve_dedicated_server_nullrenderer_x64" ]; then
-  create_wrapper "${DST_DIR}/bin/dontstarve_dedicated_server_nullrenderer_x64" "box64"
-fi
 
-'''if [ -e "${DST_DIR}/bin/dontstarve_dedicated_server_nullrenderer" ]; then
-  create_wrapper "${DST_DIR}/bin/dontstarve_dedicated_server_nullrenderer" "box86"
-fi'''
 
 echo "[entrypoint] ensure Klei dirs and minimal dst_config"
 mkdir -p "${KLEI_DIR}/${CLUSTER_NAME}" "${KLEI_DIR}/backup" "${KLEI_DIR}/download_mod"
