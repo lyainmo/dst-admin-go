@@ -1,3 +1,21 @@
+##修改了镜像、docker-entrypoint.sh
+主要改动在于packager/docker-entrypoint.warp.sh，添加了安装box64的步骤
+目前可以手动运行steamcmd和dst专服，无法通过面板启动，其他功能未见异常
+为了适配，需要面板在运行二进制文件时前面加上box64，如 box64 /steamcmd/linux32/steamcmd
+此外，还不能使用steamcmd.sh，而应当直接使用二进制。因为无法在它启动二进制的命令前添上box64
+
+为了不改动面板，此前尝试过这种做法
+mv /steamcmd/linux32/steamcmd /steamcmd/linux32/steamcmd.real
+将/steamcmd/linux32/steamcmd改为脚本
+#!/usr/bin/env bash
+exec box64 /steamcmd/linux32/steamcmd.real "$@"
+但是steamcmd会校验并自愈，行不通
+
+还尝试过box推荐的binfmt_misc方案
+可以在不修改面板程序时正常运行
+但必须修改宿主机内核，有违docker理念
+
+
 # dst-admin-go
 > 饥荒联机版管理后台
 > 
