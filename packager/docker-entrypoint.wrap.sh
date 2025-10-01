@@ -196,12 +196,13 @@ while [ ! -e "${DST_DIR}/bin/dontstarve_dedicated_server_nullrenderer" ] && \
     exit -2
   fi
   echo "Not found DST server, start to installing, try: ${retry}"
-  bash "${STEAMCMDDIR}/steamcmd.sh"
-  bash "box86 ${STEAMCMDDIR}/linux32/steamcmd" \
-    +force_install_dir "${DST_DIR}" \
-    +login anonymous \
-    +app_update 343050 validate \
-    +quit
+  
+  bash "${STEAMCMDDIR}/steamcmd.sh" \
+    || box86 "${STEAMCMDDIR}/linux32/steamcmd" \
+       +force_install_dir "${DST_DIR}" \
+       +login anonymous \
+       +app_update 343050 validate \
+       +quit
   sleep 3
   ((retry++))
 done
