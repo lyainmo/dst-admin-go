@@ -3,7 +3,7 @@ FROM arm64v8/ubuntu:22.04
 ENV DEBIAN_FRONTEND=noninteractive LANG=C.UTF-8 TZ=Asia/Shanghai
 
 
-# 更新并安装最小运行库（SteamCMD 用 i386；DST 专服用 amd64）与基础工具
+# 更新并安装最小运行库与基础工具
 RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
