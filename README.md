@@ -26,7 +26,7 @@
 
 > 总来说就是，需要面板在启动二进制文件时在前面加上box64。
 
-测试时的[docker镜像仓库地址](https://hub.docker.com/repository/docker/starlain/dst-admin-go-arm64/general)
+测试时的[docker镜像仓库地址](https://hub.docker.com/repository/docker/starlain/dst-admin-go-arm64)
 
 
 # dst-admin-go
