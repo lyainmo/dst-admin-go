@@ -5,10 +5,8 @@ set -euo pipefail
 ulimit -Sn 10000 || true
 
 # 目录与环境
-STEAMCMDDIR="${STEAMCMDDIR:-/steamcmd}"
+STEAMCMDDIR="${STEAMCMDDIR:-/app/steamcmd}"
 DST_DIR="${DST_DIR:-/app/dst-dedicated-server}"
-KLEI_DIR="${KLEI_DIR:-/root/.klei/DoNotStarveTogether}"
-CLUSTER_NAME="${CLUSTER_NAME:-MyDediServer}"
 
 log() { echo "[$(date +'%H:%M:%S')] $*"; }
 
@@ -171,7 +169,7 @@ command -v box64 >/dev/null || { echo "box64 not found"; exit 1; }
 echo "[entrypoint] ensure steamcmd exists"
 mkdir -p "${STEAMCMDDIR}"
 retry=1
-while [ ! -e "${STEAMCMDDIR}/steamcmd.sh" ]; do
+while [ ! -e "${STEAMCMDDIR}/steamcmd.sh" ] || [ ! -e "${STEAMCMDDIR}/linux32/steamcmd" ]; do
   if [ $retry -gt 3 ]; then
     echo "Download steamcmd failed after three times"
     exit -2
@@ -183,7 +181,6 @@ while [ ! -e "${STEAMCMDDIR}/steamcmd.sh" ]; do
   sleep 3
   ((retry++))
 done
-
 
 #安装饥荒服务端
 echo "[entrypoint] ensure DST dedicated server installed"
@@ -197,33 +194,17 @@ while [ ! -e "${DST_DIR}/bin/dontstarve_dedicated_server_nullrenderer" ] && \
   fi
   echo "Not found DST server, start to installing, try: ${retry}"
   
-  bash "${STEAMCMDDIR}/steamcmd.sh" \
-    || box86 "${STEAMCMDDIR}/linux32/steamcmd" \
-       +force_install_dir "${DST_DIR}" \
-       +login anonymous \
-       +app_update 343050 validate \
-       +quit
+  setsid bash -c '
+    timeout 3h box86 "'"${STEAMCMDDIR}/linux32/steamcmd"'" \
+      +force_install_dir "'"${DST_DIR}"'" \
+      +login anonymous \
+      +app_update 343050 validate \
+      +quit
+  ' || true
   sleep 3
   ((retry++))
 done
 
-
-echo "[entrypoint] ensure Klei dirs and minimal dst_config"
-mkdir -p "${KLEI_DIR}/${CLUSTER_NAME}" "${KLEI_DIR}/backup" "${KLEI_DIR}/download_mod"
-
-# 如果镜像内未提供 dst_config（目录或文件），则生成默认文件放到 /app/dst_config/dst_config
-if [ ! -d "/app/dst_config" ]; then
-  mkdir -p /app/dst_config
-fi
-if [ ! -f "/app/dst_config/dst_config" ]; then
-  cat > /app/dst_config/dst_config <<CFG
-steamcmd=${STEAMCMDDIR}
-force_install_dir=${DST_DIR}
-cluster=${CLUSTER_NAME}
-backup=${KLEI_DIR}/backup
-mod_download_path=${KLEI_DIR}/download_mod
-CFG
-fi
 
 echo "[entrypoint] launch panel"
 cd /app
